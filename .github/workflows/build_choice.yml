@@ -1,0 +1,105 @@
+name: CI Choice
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        default: "8.2"
+        type: choice
+        options:
+          - "8.2"
+          - "8.1"
+          - "8.0"
+          - "7.4"
+      operating-system:
+        required: true
+        default: "macos-latest"
+        type: choice
+        options:
+          - "macos-latest"
+          - "ubuntu-latest"
+          - "windows-latest"
+      target:
+        required: true
+        default: "cli"
+        type: choice
+        options:
+          - "cli"
+          - "micro"
+          - "all"
+      extensions:
+        type: string
+      debug:
+        type: boolean
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        operating-system: [macos-latest]
+    name: static-php-cli build on ${{ matrix.operating-system }}
+    runs-on: ${{ matrix.operating-system }}
+    steps:
+      - uses: actions/checkout@v2
+
+      # Install macOS missing packages and mark os suffix
+      - if: ${{ matrix.operating-system == 'macos-latest' }}
+        run: |
+          brew install automake gzip
+          echo "SPC_BUILD_OS=macos" >> $GITHUB_ENV
+
+      # Install Ubuntu missing packages and mark os suffix
+      - if: ${{ matrix.operating-system == 'ubuntu-latest' }}
+        run: |
+          sudo apt install musl-tools -y
+          echo "SPC_BUILD_OS=linux" >> $GITHUB_ENV
+
+      # Cache composer dependencies
+      - id: cache-composer-deps
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: composer-dependencies
+
+      # If there's no Composer cache, install dependencies
+      - if: steps.cache-composer-deps.outputs.cache-hit != 'true'
+        run: composer update --no-dev
+
+      # Cache downloaded source
+      - id: cache-download
+        uses: actions/cache@v3
+        with:
+          path: downloads
+          key: php-${{ inputs.version }}-dependencies
+
+      # With or without debug
+      - if: inputs.debug == true
+        run: echo "SPC_BUILD_DEBUG=--debug" >> $GITHUB_ENV
+
+      # With target select: cli, micro or both
+      - if: ${{ inputs.target == 'micro' || inputs.target == 'all' }}
+        run: echo "SPC_BUILD_TARGET='--build-${{ inputs.target }}'" >> $GITHUB_ENV
+
+      # If there's no dependencies cache, fetch sources, with or without debug
+      - run: CACHE_API_EXEC=yes ./bin/spc fetch --with-php=${{ inputs.version }} --all ${{ env.SPC_BUILD_DEBUG }}
+
+      # Run build command
+      - run: ./bin/spc build ${{ inputs.extensions }} ${{ env.SPC_BUILD_DEBUG }} ${{ env.SPC_BUILD_TARGET }}
+
+      # Upload cli executable
+      - if: ${{ inputs.target == 'cli' || inputs.target == 'all' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: php-${{ inputs.version }}-${{ env.SPC_BUILD_OS }}
+          path: buildroot/bin/php
+
+      # Upload micro self-extracted executable
+      - if: ${{ inputs.target == 'micro' || inputs.target == 'all' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: micro-${{ inputs.version }}-${{ env.SPC_BUILD_OS }}
+          path: buildroot/bin/micro.sfx
