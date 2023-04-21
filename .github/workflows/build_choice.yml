@@ -16,9 +16,9 @@ on:
         required: true
         type: choice
         options:
-          - "macos-latest"
-          - "ubuntu-latest"
-          - "windows-latest"
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
       target:
         required: true
         default: "cli"
