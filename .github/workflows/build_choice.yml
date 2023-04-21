@@ -14,7 +14,6 @@ on:
           - "7.4"
       operating-system:
         required: true
-        default: "macos-latest"
         type: choice
         options:
           - "macos-latest"
@@ -30,6 +29,7 @@ on:
           - "all"
       extensions:
         type: string
+        default: "phar,openssl,bcmath,curl,mbstring,tokenizer,xml,zip,zlib,pdo,pdo_mysql,fileinfo,dom,ctype"
       debug:
         type: boolean
 
@@ -40,7 +40,7 @@ jobs:
   build:
     strategy:
       matrix:
-        operating-system: [macos-latest]
+        operating-system: [${{ inputs.operating-system }}]
     name: static-php-cli build on ${{ matrix.operating-system }}
     runs-on: ${{ matrix.operating-system }}
     steps:
